@@ -1,4 +1,4 @@
-# LLaMA 2 From Scratch
+<img src="https://github.com/batukoray/assets_of_mine/blob/main/llama_banner.png?raw=1" alt="LLaMA 2 from Scratch" width="700">
 
 This repository is our implementation workspace for building a LLaMA 2-style decoder-only language model on top of the existing `SequenceProcessing` and `ComputationalGraph` primitives already used in this codebase.
 
