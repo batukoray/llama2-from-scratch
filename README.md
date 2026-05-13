@@ -31,4 +31,4 @@ We will implement a LLaMA 2-style causal language model with:
 
 We are using this diagram as the architecture reference for the repository:
 
-![LLaMA 2 architecture diagram](https://github.com/batukoray/assets_of_mine/blob/main/llama_diagram.png?raw=1)
+![LLaMA 2 architecture diagram](https://github.com/batukoray/assets_of_mine/blob/main/llama_diagram_black_white_rounded.png?raw=1)
