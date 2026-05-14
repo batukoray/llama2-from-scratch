@@ -1,4 +1,4 @@
-<img src="https://github.com/batukoray/assets_of_mine/blob/main/llama_banner.png?raw=1" alt="LLaMA 2 from Scratch" width="700">
+<img src="https://github.com/batukoray/assets_of_mine/blob/main/llama_banner.png?raw=1" alt="LLaMA 2 from Scratch" height="200">
 
 ![LLaMA 2 architecture diagram](https://github.com/batukoray/assets_of_mine/blob/main/llama_diagram_black_white_rounded.png?raw=1)
 
