@@ -13,8 +13,16 @@ venv/
 ENV/
 .env
 
-# Pytest
+# Test / coverage
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type / lint caches
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 
 # IDE
 .vscode/
@@ -25,8 +33,4 @@ ENV/
 Thumbs.db
 
 # Local stray files
-=
 pyenv.cfg
-
-__pycache__/
-*.pyc
