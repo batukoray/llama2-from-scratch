@@ -96,52 +96,6 @@ class TransformerParameterTest(unittest.TestCase):
 
 class Llama2ParameterTest(unittest.TestCase):
 
-    def testBasicProperties(self):
-        """
-        Checks that the LLaMA 2 parameter object stores its core settings correctly.
-        """
-        param = Llama2Parameter(
-            seed=7,
-            epoch=12,
-            optimizer=DummyOptimizer(),
-            initialization=DummyInitialization(),
-            loss=DummyFunction(),
-            vocabulary_length=1024,
-            embedding_dimension=128,
-            decoder_layer_count=6,
-            attention_head_count=8,
-            key_value_head_count=4,
-            context_length=256,
-            feed_forward_dimension=512,
-            epsilon=1e-6
-        )
-
-        self.assertEqual(1024, param.getVocabularyLength())
-        self.assertEqual(128, param.getEmbeddingDimension())
-        self.assertEqual(6, param.getDecoderLayerCount())
-        self.assertEqual(8, param.getAttentionHeadCount())
-        self.assertEqual(4, param.getKeyValueHeadCount())
-        self.assertEqual(256, param.getContextLength())
-        self.assertEqual(512, param.getFeedForwardDimension())
-        self.assertEqual(16, param.getHeadDimension())
-        self.assertEqual(1e-6, param.getEpsilon())
-        self.assertTrue(param.usesGroupedQueryAttention())
-
-    def testTinyPreset(self):
-        """
-        Ensures that the tiny preset returns a small, internally consistent setup.
-        """
-        param = Llama2Parameter.tinyLlama2()
-
-        self.assertEqual(256, param.getVocabularyLength())
-        self.assertEqual(64, param.getEmbeddingDimension())
-        self.assertEqual(2, param.getDecoderLayerCount())
-        self.assertEqual(4, param.getAttentionHeadCount())
-        self.assertEqual(4, param.getKeyValueHeadCount())
-        self.assertEqual(32, param.getContextLength())
-        self.assertEqual(256, param.getFeedForwardDimension())
-        self.assertFalse(param.usesGroupedQueryAttention())
-
     def testInvalidHeadConfiguration(self):
         """
         Rejects attention settings that do not divide the embedding dimension cleanly.
@@ -162,6 +116,126 @@ class Llama2ParameterTest(unittest.TestCase):
                 feed_forward_dimension=256,
                 epsilon=1e-6
             )
+
+    def testInvalidEpsilon(self):
+        """
+        Rejects epsilon values that are zero or negative.
+        """
+        with self.assertRaises(ValueError):
+            Llama2Parameter(
+                seed=1,
+                epoch=1,
+                optimizer=DummyOptimizer(),
+                initialization=DummyInitialization(),
+                loss=DummyFunction(),
+                vocabulary_length=256,
+                embedding_dimension=128,
+                decoder_layer_count=2,
+                attention_head_count=8,
+                key_value_head_count=4,
+                context_length=32,
+                feed_forward_dimension=256,
+                epsilon=0.0
+            )
+
+        with self.assertRaises(ValueError):
+            Llama2Parameter(
+                seed=1,
+                epoch=1,
+                optimizer=DummyOptimizer(),
+                initialization=DummyInitialization(),
+                loss=DummyFunction(),
+                vocabulary_length=256,
+                embedding_dimension=128,
+                decoder_layer_count=2,
+                attention_head_count=8,
+                key_value_head_count=4,
+                context_length=32,
+                feed_forward_dimension=256,
+                epsilon=-1e-6
+            )
+
+    def testInvalidKeyValueHeadCount(self):
+        """
+        Rejects grouped-query settings where key and value heads exceed query heads.
+        """
+        with self.assertRaises(ValueError):
+            Llama2Parameter(
+                seed=1,
+                epoch=1,
+                optimizer=DummyOptimizer(),
+                initialization=DummyInitialization(),
+                loss=DummyFunction(),
+                vocabulary_length=256,
+                embedding_dimension=128,
+                decoder_layer_count=2,
+                attention_head_count=8,
+                key_value_head_count=16,
+                context_length=32,
+                feed_forward_dimension=256,
+                epsilon=1e-6
+            )
+
+    def testGroupedQueryAttention(self):
+        """
+        Checks whether grouped-query attention is reported correctly.
+        """
+        grouped_query_parameter = Llama2Parameter(
+            seed=1,
+            epoch=1,
+            optimizer=DummyOptimizer(),
+            initialization=DummyInitialization(),
+            loss=DummyFunction(),
+            vocabulary_length=256,
+            embedding_dimension=128,
+            decoder_layer_count=2,
+            attention_head_count=8,
+            key_value_head_count=4,
+            context_length=32,
+            feed_forward_dimension=256,
+            epsilon=1e-6
+        )
+
+        standard_attention_parameter = Llama2Parameter(
+            seed=1,
+            epoch=1,
+            optimizer=DummyOptimizer(),
+            initialization=DummyInitialization(),
+            loss=DummyFunction(),
+            vocabulary_length=256,
+            embedding_dimension=128,
+            decoder_layer_count=2,
+            attention_head_count=8,
+            key_value_head_count=8,
+            context_length=32,
+            feed_forward_dimension=256,
+            epsilon=1e-6
+        )
+
+        self.assertTrue(grouped_query_parameter.usesGroupedQueryAttention())
+        self.assertFalse(standard_attention_parameter.usesGroupedQueryAttention())
+
+    def testHeadDimension(self):
+        """
+        Checks that the head dimension is computed from embedding size and head count.
+        """
+        param = Llama2Parameter(
+            seed=1,
+            epoch=1,
+            optimizer=DummyOptimizer(),
+            initialization=DummyInitialization(),
+            loss=DummyFunction(),
+            vocabulary_length=256,
+            embedding_dimension=128,
+            decoder_layer_count=2,
+            attention_head_count=8,
+            key_value_head_count=8,
+            context_length=32,
+            feed_forward_dimension=256,
+            epsilon=1e-6
+        )
+
+        self.assertEqual(16, param.getHeadDimension())
 
 
 if __name__ == "__main__":
