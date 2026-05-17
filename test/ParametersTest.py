@@ -215,27 +215,6 @@ class Llama2ParameterTest(unittest.TestCase):
         self.assertTrue(grouped_query_parameter.usesGroupedQueryAttention())
         self.assertFalse(standard_attention_parameter.usesGroupedQueryAttention())
 
-    def testHeadDimension(self):
-        """
-        Checks that the head dimension is computed from embedding size and head count.
-        """
-        param = Llama2Parameter(
-            seed=1,
-            epoch=1,
-            optimizer=DummyOptimizer(),
-            initialization=DummyInitialization(),
-            loss=DummyFunction(),
-            vocabulary_length=256,
-            embedding_dimension=128,
-            decoder_layer_count=2,
-            attention_head_count=8,
-            key_value_head_count=8,
-            context_length=32,
-            feed_forward_dimension=256,
-            epsilon=1e-6
-        )
-
-        self.assertEqual(16, param.getHeadDimension())
 
 
 if __name__ == "__main__":

@@ -280,14 +280,6 @@ class Llama2Parameter(NeuralNetworkParameter):
         """
         return self.__epsilon
 
-    def getHeadDimension(self) -> int:
-        """
-        Returns the width of each attention head.
-
-        :return: Dimension per attention head.
-        """
-        return self.__embedding_dimension // self.__attention_head_count
-
     def usesGroupedQueryAttention(self) -> bool:
         """
         Tells whether the configuration uses grouped-query attention.
