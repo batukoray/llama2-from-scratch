@@ -8,7 +8,7 @@ setup(
     name="nlptoolkit_sequenceprocessing",
     version="1.0.2",
     packages=['SequenceProcessing', 'SequenceProcessing.Classification', 'SequenceProcessing.Functions',
-              'SequenceProcessing.Parameters', 'SequenceProcessing.Sequence'],
+              'SequenceProcessing.Parameters', 'SequenceProcessing.Sequence', 'SequenceProcessing.Tokenizer'],
     url="https://github.com/StarlangSoftware/SequenceProcessing-Py",
     author="olcaytaner",
     author_email="olcay.yildiz@ozyegin.edu.tr",
