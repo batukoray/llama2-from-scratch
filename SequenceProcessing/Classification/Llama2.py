@@ -11,6 +11,7 @@ from SequenceProcessing.Functions.Mask import Mask
 from SequenceProcessing.Functions.MultiplyByConstant import MultiplyByConstant
 from SequenceProcessing.Functions.RMSNorm import RMSNorm
 from SequenceProcessing.Functions.RotaryPositionEmbedding import RotaryPositionEmbedding
+from SequenceProcessing.Functions.SiLU import SiLU
 from SequenceProcessing.Functions.Transpose import Transpose
 from SequenceProcessing.Parameters.Llama2Parameter import Llama2Parameter
 
@@ -87,13 +88,14 @@ class Llama2(ComputationalGraph):
         2. Causal self-attention with RoPE
         3. Residual (Add)
         4. RMSNorm
-        5. SwiGLU feed-forward (?)
+        5. SwiGLU feed-forward
         6. Residual (Add)
         (output)
         """
         embedding_dimension = self.__parameter.getEmbeddingDimension()
         attention_head_count = self.__parameter.getAttentionHeadCount()
         head_dimension = embedding_dimension // attention_head_count
+        feed_forward_dimension = self.__parameter.getFeedForwardDimension()
         epsilon = self.__parameter.getEpsilon()
 
         # 1. RMSNorm
@@ -150,7 +152,30 @@ class Llama2(ComputationalGraph):
         feed_forward_input = self.addEdge(attention_residual, RMSNorm(embedding_dimension, epsilon))
 
         # 5. SwiGLU feed-forward network.
-        raise ValueError("not implemented yet")
+        # SwiGLU(x) = SiLU(xW1) hadamard (xW2)
+        # FFN(x) = W3(SwiGLU(x))
+        # W1, W2: embedding_dimension -> feed_forward_dimension
+        # W3: feed_forward_dimension -> embedding_dimension
+
+        w1 = self.__createWeightNode(embedding_dimension, feed_forward_dimension)
+        w2 = self.__createWeightNode(embedding_dimension, feed_forward_dimension)
+        w3 = self.__createWeightNode(feed_forward_dimension, embedding_dimension)
+
+        # gate = SiLU(xW1)
+        gate = self.addEdge(feed_forward_input, w1)
+        gate = self.addEdge(gate, SiLU())
+
+        # up = xW2
+        up = self.addEdge(feed_forward_input, w2)
+
+        # swiglu = SiLU(xW1) * (xW2)
+        swiglu = self.addEdge(gate, up, False, True)
+
+        # feed_forward_output = swiglu W3
+        feed_forward_output = self.addEdge(swiglu, w3)
+
+        # 6. Residual: add attention residual + feed-forward output.
+        return self.addAdditionEdge(attention_residual, feed_forward_output, False)
 
     def buildGraph(self) -> None:
         """
