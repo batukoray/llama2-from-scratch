@@ -17,7 +17,7 @@ class Llama2Parameter(NeuralNetworkParameter):
     an encoder-decoder transformer. A decoder-only language model has a simpler
     structure, so it helps to keep its settings in a separate class. This class
     stores the dimensions that define a LLaMA 2 style model and also inherits
-    the common training settings from "NeuralNetworkParameter".
+    the common training settings from ``NeuralNetworkParameter``.
     """
 
     __vocabulary_length: int
@@ -145,9 +145,9 @@ class Llama2Parameter(NeuralNetworkParameter):
     def tinyLlama2(cls,
                    seed: int = 1,
                    epoch: int = 10,
-                   optimizer: Optimizer = AdamW(0.001, 0.99, 0.9, 0.999, 1e-8, 0.0),
-                   initialization: Initialization = RandomInitialization(),
-                   loss: Function = CrossEntropyLoss()) -> Llama2Parameter:
+                   optimizer: Optional[Optimizer] = None,
+                   initialization: Optional[Initialization] = None,
+                   loss: Optional[Function] = None) -> "Llama2Parameter":
         """
         Builds a very small configuration for tests and toy experiments.
 
@@ -157,11 +157,17 @@ class Llama2Parameter(NeuralNetworkParameter):
 
         :param seed: Random seed used during initialization and training.
         :param epoch: Number of training epochs.
-        :param optimizer: Optimizer. A default AdamW optimizer is used if none is given.
-        :param initialization: Initialization method.
-        :param loss: Loss function.
+        :param optimizer: Optional optimizer. A default AdamW optimizer is used if none is given.
+        :param initialization: Optional initialization method.
+        :param loss: Optional loss function.
         :return: A compact LLaMA 2 style parameter object.
         """
+        if optimizer is None:
+            optimizer = AdamW(0.001, 0.99, 0.9, 0.999, 1e-8, 0.0)
+        if initialization is None:
+            initialization = RandomInitialization()
+        if loss is None:
+            loss = CrossEntropyLoss()
 
         return cls(
             seed=seed,
@@ -183,9 +189,9 @@ class Llama2Parameter(NeuralNetworkParameter):
     def llama2_7B(cls,
                   seed: int = 1,
                   epoch: int = 1,
-                  optimizer: Optimizer = AdamW(0.001, 0.99, 0.9, 0.999, 1e-8, 0.0),
-                  initialization: Initialization = RandomInitialization(),
-                  loss: Function = CrossEntropyLoss()) -> Llama2Parameter:
+                  optimizer: Optional[Optimizer] = None,
+                  initialization: Optional[Initialization] = None,
+                  loss: Optional[Function] = None) -> "Llama2Parameter":
         """
         Builds a reference configuration that matches the published 7B layout.
 
@@ -194,12 +200,18 @@ class Llama2Parameter(NeuralNetworkParameter):
 
         :param seed: Random seed used during initialization and training.
         :param epoch: Number of training epochs.
-        :param optimizer: Optimizer. A default AdamW optimizer is used if none is given.
-        :param initialization: Initialization method.
-        :param loss: Loss function.
+        :param optimizer: Optional optimizer. A default AdamW optimizer is used if none is given.
+        :param initialization: Optional initialization method.
+        :param loss: Optional loss function.
         :return: A parameter object that mirrors the 7B model dimensions.
         """
-        
+        if optimizer is None:
+            optimizer = AdamW(0.001, 0.99, 0.9, 0.999, 1e-8, 0.0)
+        if initialization is None:
+            initialization = RandomInitialization()
+        if loss is None:
+            loss = CrossEntropyLoss()
+
         return cls(
             seed=seed,
             epoch=epoch,
