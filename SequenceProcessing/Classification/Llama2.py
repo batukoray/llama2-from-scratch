@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import math
 import random
 
@@ -237,3 +237,46 @@ class Llama2(ComputationalGraph):
         lm_head = self.__createWeightNode(embedding_dimension, vocab_length)
         logits = self.addEdge(current, lm_head)
         self.output_node = self.addEdge(logits, Softmax())
+
+    def __ensureGraph(self) -> None:
+        """
+        Makes sure the forward graph exists before training, testing, or generation.
+        """
+        if len(self.input_nodes) == 0 or self.output_node is None:
+            self.buildGraph()
+
+    def predictNextToken(self, token_ids: List[int]) -> int:
+        """
+        Predicts the next token after the given token ids.
+        """
+        self.__ensureGraph()
+
+        if len(token_ids) == 0:
+            raise ValueError("At least one token is required.")
+
+        # trim to context length
+        if len(token_ids) > self.__parameter.getContextLength():
+            token_ids = token_ids[-self.__parameter.getContextLength():]
+
+        self.setInput(token_ids)
+        y_pred = self.predict()
+
+        return int(y_pred[-1])
+    def generate_greedy(self,
+                 token_ids: List[int],
+                 max_new_tokens: int,
+                 end_token_id: Optional[int] = None) -> List[int]:
+        """
+        Generates tokens greedily from the current model.
+        """
+        generated_token_ids = list(token_ids)
+
+        for _ in range(max_new_tokens):
+            next_token_id = self.predictNextToken(generated_token_ids)
+            generated_token_ids.append(next_token_id)
+
+            if end_token_id is not None and next_token_id == end_token_id:
+                break
+
+        return generated_token_ids
+
