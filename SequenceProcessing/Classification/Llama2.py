@@ -35,9 +35,6 @@ class Llama2(ComputationalGraph):
         self.__random_generator = random.Random(self.__parameter.getSeed())
 
     def createOneHotVectors(self, token_ids: List[int]) -> Tensor:
-        if len(self.input_nodes) == 0:
-            raise ValueError("Input node must be created before calling createInputTensor.")
-
         values = []
         vocabulary_length = self.__parameter.getVocabularyLength()
 
@@ -59,7 +56,13 @@ class Llama2(ComputationalGraph):
     def setInput(self, token_ids: List[int]) -> None:
         """
         Set the input to the model to the given token ids.
+        Also checks for context length.
         """
+        if len(self.input_nodes) == 0:
+            raise ValueError("Input node must be created before calling setInput.")
+        if len(token_ids) > self.__parameter.getContextLength():
+            raise ValueError("Token id sequence exceeds the configured context length.")
+
         one_hot_tensor = self.createOneHotVectors(token_ids)
         self.__input_node.setValue(one_hot_tensor)
 
