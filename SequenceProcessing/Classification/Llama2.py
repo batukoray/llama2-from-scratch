@@ -143,6 +143,13 @@ class Llama2(ComputationalGraph):
         attention_output = self.addEdge(concatenated_attention, wo) # (sequence_length, embedding_dimension)
         # </editor-fold>
 
+        # 3. Residual: add original block input + attention output.
+        attention_residual = self.addAdditionEdge(current, attention_output, False)
+
+        # 4. RMSNorm
+        feed_forward_input = self.addEdge(attention_residual, RMSNorm(embedding_dimension, epsilon))
+
+        # 5. SwiGLU feed-forward network.
         raise ValueError("not implemented yet")
 
     def buildGraph(self) -> None:
