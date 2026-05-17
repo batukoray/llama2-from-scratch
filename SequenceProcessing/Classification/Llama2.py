@@ -49,13 +49,12 @@ class Llama2(ComputationalGraph):
         # tensor consisting of all one hot encodings
         return Tensor(values, (len(token_ids), vocabulary_length))
 
-    def createInputTensor(self, token_ids: List[int]) -> None:
+    def setInput(self, token_ids: List[int]) -> None:
         """
-        Creates the embedded input tensor from token ids.
+        Set the input to the model to the given token ids.
         """
         one_hot_tensor = self.createOneHotVectors(token_ids)
-        # TODO how do I reference the embedding matrix?
-        self.input_nodes[0].setValue(one_hot_tensor.multiply(embedding_matrix.getValue()))
+        self.input_nodes[0].setValue(one_hot_tensor)
 
     def buildGraph(self) -> None:
         """
