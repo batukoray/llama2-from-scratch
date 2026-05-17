@@ -20,7 +20,6 @@ class Llama2(ComputationalGraph):
     __parameter: Llama2Parameter
 
     __input_node: ComputationalNode
-    __embedding_node: ComputationalNode
 
     def __init__(self, parameter: Llama2Parameter):
         """
@@ -58,37 +57,82 @@ class Llama2(ComputationalGraph):
         one_hot_tensor = self.createOneHotVectors(token_ids)
         self.__input_node.setValue(one_hot_tensor)
 
+    def __createWeightNode(self,
+                           input_dimension: int,
+                           output_dimension: int,
+                           random_generator: random.Random) -> MultiplicationNode:
+        """
+        Creates a learnable matrix node with the given shape.
+        """
+        return MultiplicationNode(
+            value=Tensor(
+                self.__parameter.initializeWeights(
+                    input_dimension,
+                    output_dimension,
+                    random_generator
+                ),
+                (input_dimension, output_dimension)
+            ),
+            learnable=True,
+            is_biased=False
+        )
+
+    def decoderBlock(self,
+                     current: ComputationalNode,
+                     random_generator: random.Random) -> ComputationalNode:
+        """
+        Builds one LLaMA 2 decoder block:
+        (input)
+        1. RMSNorm
+        2. Causal self-attention with RoPE
+        3. Residual (Add)
+        4. RMSNorm
+        5. SwiGLU feed-forward (?)
+        6. Residual (Add)
+        (output)
+        """
+
+        raise ValueError("Not implemented yet.")
+
     def buildGraph(self) -> None:
         """
-        Builds the decoder-only forward path from token ids to embedding, N decoder blocks with RMSNorm, masked self-attention with RoPE, residuals, SwiGLU feed-forward, final RMSNorm, lm_head, and Softmax.
+        Builds the decoder-only forward path from token ids to embedding,
+        N decoder blocks with RMSNorm, masked self-attention with RoPE, residuals,
+        SwiGLU feed-forward, final RMSNorm, lm_head, and Softmax.
         """
+        # used when creating E and lm_head
+        random_generator = random.Random(self.__parameter.getSeed())
+        vocab_length = self.__parameter.getVocabularyLength()
+        embedding_dimension = self.__parameter.getEmbeddingDimension()
+
+        # used when creating RMSNorm nodes
+        epsilon = self.__parameter.getEpsilon()
+
         # Create the input node.
         input_node = MultiplicationNode(learnable=False, is_biased=False)
         self.input_nodes.append(input_node)
         self.__input_node = input_node
 
         # Create embedding matrix E
-        vocab_length = self.__parameter.getVocabularyLength()
-        embedding_dimension = self.__parameter.getEmbeddingDimension()
-        random_generator = random.Random(self.__parameter.getSeed())
-        embedding_matrix = Tensor(
-            self.__parameter.initializeWeights(
-                vocab_length,
-                embedding_dimension,
-                random_generator
-            ),
-            (vocab_length, embedding_dimension)
+        # (one hot vector * E) = embeddings
+        embedding_node = self.__createWeightNode(
+            input_dimension=vocab_length,
+            output_dimension=embedding_dimension,
+            random_generator=random_generator
+        )
+        current = self.addEdge(input_node, embedding_node)
+
+        # decoder blocks
+        for _ in range(self.__parameter.getDecoderLayerCount()):
+            current = self.decoderBlock(current, random_generator)
+
+        # final RMSNorm
+        current = self.addEdge(
+            current,
+            RMSNorm(embedding_dimension, epsilon)
         )
 
-        # Wrap the embedding matrix inside a MultiplicationNode
-        # because (one hot vector * E) = embeddings
-        # This node is used to convert input tokens to embeddings
-        embedding_node = MultiplicationNode(
-            value = embedding_matrix,
-            learnable = True,
-            is_biased = False,
-        )
-        self.addEdge(input_node, embedding_node)
-        self.__embedding_node = embedding_node
-
-        # Decoder blocks, final RMSNorm, lm_head projection, and Softmax go here.
+        # lm_head -> logits -> softmax -> output
+        lm_head = self.__createWeightNode(embedding_dimension, vocab_length, random_generator)
+        logits = self.addEdge(current, lm_head)
+        self.output_node = self.addEdge(logits, Softmax())
