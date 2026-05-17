@@ -19,6 +19,8 @@ class Llama2(ComputationalGraph):
 
     __parameter: Llama2Parameter
 
+    __input_node: ComputationalNode
+    __embedding_node: ComputationalNode
 
     def __init__(self, parameter: Llama2Parameter):
         """
@@ -54,15 +56,16 @@ class Llama2(ComputationalGraph):
         Set the input to the model to the given token ids.
         """
         one_hot_tensor = self.createOneHotVectors(token_ids)
-        self.input_nodes[0].setValue(one_hot_tensor)
+        self.__input_node.setValue(one_hot_tensor)
 
     def buildGraph(self) -> None:
         """
         Builds the decoder-only forward path from token ids to embedding, N decoder blocks with RMSNorm, masked self-attention with RoPE, residuals, SwiGLU feed-forward, final RMSNorm, lm_head, and Softmax.
         """
         # Create the input node.
-        input_node = MultiplicationNode(learnable=False, is_biased=True)
+        input_node = MultiplicationNode(learnable=False, is_biased=False)
         self.input_nodes.append(input_node)
+        self.__input_node = input_node
 
         # Create embedding matrix E
         vocab_length = self.__parameter.getVocabularyLength()
@@ -80,7 +83,12 @@ class Llama2(ComputationalGraph):
         # Wrap the embedding matrix inside a MultiplicationNode
         # because (one hot vector * E) = embeddings
         # This node is used to convert input tokens to embeddings
-        embedding_node = MultiplicationNode(embedding_matrix, (vocab_length, embedding_dimension))
+        embedding_node = MultiplicationNode(
+            value = embedding_matrix,
+            learnable = True,
+            is_biased = False,
+        )
         self.addEdge(input_node, embedding_node)
+        self.__embedding_node = embedding_node
 
         # Decoder blocks, final RMSNorm, lm_head projection, and Softmax go here.
