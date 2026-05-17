@@ -139,7 +139,7 @@ class Llama2(ComputationalGraph):
             k_transpose = self.addEdge(key_heads[key_value_index], Transpose())
 
             # S (raw attention score matrix): (sequence_length, sequence_length)
-            S = self.addEdge(q_rope, k_transpose)
+            S = self.addEdge(q_rope, k_transpose, False, False)
 
             # S_scaled = S / sqrt(d_k)
             S_scaled = self.addEdge(S, MultiplyByConstant(1.0 / math.sqrt(head_dimension)))
