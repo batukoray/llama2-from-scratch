@@ -59,7 +59,11 @@ class Llama2(ComputationalGraph):
     def setInput(self, token_ids: List[int]) -> None:
         """
         Set the input to the model to the given token ids.
+        Also checks for context length.
         """
+        if len(token_ids) > self.__parameter.getContextLength():
+            raise ValueError("Token id sequence exceeds the configured context length.")
+
         one_hot_tensor = self.createOneHotVectors(token_ids)
         self.__input_node.setValue(one_hot_tensor)
 
