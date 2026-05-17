@@ -99,6 +99,9 @@ class Llama2(ComputationalGraph):
         feed_forward_dimension = self.__parameter.getFeedForwardDimension()
         epsilon = self.__parameter.getEpsilon()
 
+        if head_dimension % 2 != 0:
+            raise ValueError("attention head dimension must be even for RoPE.")
+
         # 1. RMSNorm
         # output: (sequence_length, embedding_dimension)
         attention_input = self.addEdge(current, RMSNorm(embedding_dimension, epsilon))
