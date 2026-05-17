@@ -40,7 +40,7 @@ class RMSNorm(Function):
         shape = tensor.getShape()
         row_size = shape[-1]
         data = tensor.getData()
-        self.__last_input = Tensor(data, shape)
+        self.__last_input = tensor
 
         if row_size == 0:
             raise ValueError("RMSNorm cannot work on an empty tensor.")
