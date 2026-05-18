@@ -2,6 +2,7 @@ from typing import List, Optional
 import math
 import random
 
+from Classification.Performance.ClassificationPerformance import ClassificationPerformance
 from ComputationalGraph.ComputationalGraph import ComputationalGraph
 from ComputationalGraph.Function.Softmax import Softmax
 from ComputationalGraph.Node.ComputationalNode import ComputationalNode
@@ -65,6 +66,17 @@ class Llama2(ComputationalGraph):
 
         one_hot_tensor = self.createOneHotVectors(token_ids)
         self.__input_node.setValue(one_hot_tensor)
+
+        if len(self.input_nodes) > 1:
+            self.input_nodes[1].setValue(
+                Tensor(
+                    [0.0] * (len(token_ids) * self.__parameter.getVocabularyLength()),
+                    (len(token_ids), self.__parameter.getVocabularyLength())
+                )
+            )
+
+    def setLabels(self, token_ids: List[int]) -> None:
+        self.input_nodes[1].setValue(self.createOneHotVectors(token_ids))
 
     def __createWeightNode(self, input_dimension: int, output_dimension: int) -> MultiplicationNode:
         """
@@ -238,9 +250,16 @@ class Llama2(ComputationalGraph):
         logits = self.addEdge(current, lm_head)
         self.output_node = self.addEdge(logits, Softmax())
 
+        # for training/testing:
+        class_label_node = ComputationalNode()
+        self.input_nodes.append(class_label_node)
+
+        loss_inputs = [self.output_node, class_label_node]
+        self.addFunctionEdge(loss_inputs, self.__parameter.getLossFunction(), False)
+
     def __ensureGraph(self) -> None:
         """
-        Makes sure the forward graph exists before training, testing, or generation.
+        Makes sure the graph exists.
         """
         if len(self.input_nodes) == 0 or self.output_node is None:
             self.buildGraph()
@@ -279,4 +298,124 @@ class Llama2(ComputationalGraph):
                 break
 
         return generated_token_ids
+
+
+    @staticmethod
+    def __tensorToTokenIds(instance: Tensor) -> List[int]:
+        """
+        Converts a 1D token-id tensor into token ids.
+        """
+        shape = instance.getShape()
+        if len(shape) != 1:
+            raise ValueError("Llama2 expects each instance to be a 1D token-id Tensor.")
+
+        token_ids = []
+        for i in range(shape[0]):
+            token_value = instance.getValue((i,))
+            token_id = int(token_value)
+            token_ids.append(token_id)
+
+        return token_ids
+
+    def __createInputAndLabels(self, token_ids: List[int]) -> tuple[List[int], List[int]]:
+        """
+        Sets model input to all tokens except the last one and returns next-token labels.
+        e.g., for input [1,2,3,4]
+        returns ([1,2,3], [2,3,4])
+        for input_token_ids and labels respectively
+        """
+        if len(token_ids) < 2:
+            return [],[]
+
+        maximum_length = self.__parameter.getContextLength() + 1
+        if len(token_ids) > maximum_length:
+            token_ids = token_ids[:maximum_length]
+
+        input_token_ids = token_ids[:-1]
+        class_labels = token_ids[1:]
+
+        return input_token_ids, class_labels
+
+    def train(self, train_set: List[Tensor]) -> None:
+        """
+        Trains the model as a next-token language model.
+
+        :param train_set: Training sequences represented as 1D token-id tensors.
+        """
+        self.__ensureGraph()
+        random_generator = random.Random(self.__parameter.getSeed())
+
+        # Epoch
+        for _ in range(self.__parameter.getEpoch()):
+            # Shuffle
+            for _ in range(len(train_set)):
+                i1 = random_generator.randint(0, len(train_set) - 1)
+                i2 = random_generator.randint(0, len(train_set) - 1)
+                train_set[i1], train_set[i2] = train_set[i2], train_set[i1]
+
+            # Step
+            for tensor in train_set:
+                token_ids = self.__tensorToTokenIds(tensor)
+                input_token_ids, labels = self.__createInputAndLabels(token_ids)
+
+                self.setInput(input_token_ids)
+                self.setLabels(labels)
+                self.forwardCalculation()
+                self.backpropagation()
+
+            self.__parameter.getOptimizer().setLearningRate()
+
+    def test(self, test_set: List[Tensor]):
+        """
+        Tests next-token prediction accuracy.
+
+        :param test_set: Test sequences represented as 1D token-id tensors.
+        :return: Classification performance.
+        """
+        self.__ensureGraph()
+        correct = 0
+        total = 0
+
+        for tensor in test_set:
+            token_ids = self.__tensorToTokenIds(tensor)
+            input_token_ids, labels = self.__createInputAndLabels(token_ids)
+            self.setInput(input_token_ids)
+
+            predicted = self.predict()
+
+            for i in range(len(labels)):
+                if int(predicted[i]) == labels[i]:
+                    correct += 1
+                total += 1
+
+        if total == 0:
+            return ClassificationPerformance(0.0)
+
+        return ClassificationPerformance((correct + 0.0) / total)
+
+    def getOutputValue(self, output_node: ComputationalNode) -> List[float]:
+        """
+        Extracts predicted token ids from the output node.
+        Direct copy from Transformer.py
+
+        :param output_node: Output node.
+        :return: Predicted token ids.
+        """
+        class_labels = []
+        value = output_node.getValue()
+
+        for i in range(value.getShape()[0]):
+            max_val = float("-inf")
+            index = -1.0
+
+            for j in range(value.getShape()[1]):
+                current = value.getValue((i, j))
+                if current > max_val:
+                    max_val = current
+                    index = float(j)
+
+            class_labels.append(index)
+
+        return class_labels
+
 
