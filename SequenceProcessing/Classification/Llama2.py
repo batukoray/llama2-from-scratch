@@ -281,10 +281,10 @@ class Llama2(ComputationalGraph):
         y_pred = self.predict()
 
         return int(y_pred[-1])
-    def generate_greedy(self,
-                 token_ids: List[int],
-                 max_new_tokens: int,
-                 end_token_id: Optional[int] = None) -> List[int]:
+    def generateGreedy(self,
+                       token_ids: List[int],
+                       max_new_tokens: int,
+                       end_token_id: Optional[int] = None) -> List[int]:
         """
         Generates tokens greedily from the current model.
         """
