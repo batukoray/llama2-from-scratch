@@ -273,6 +273,9 @@ class Llama2(ComputationalGraph):
         if len(self.input_nodes) == 0 or self.output_node is None:
             self.buildGraph()
 
+        if getattr(self, "_ComputationalGraph__leaf_nodes", None) is None:
+            self._ComputationalGraph__leaf_nodes = self._ComputationalGraph__findLeafNodes()
+
     def predictNextToken(self, token_ids: List[int]) -> int:
         """
         Predicts the next token after the given token ids.
@@ -431,4 +434,3 @@ class Llama2(ComputationalGraph):
             class_labels.append(index)
 
         return class_labels
-
