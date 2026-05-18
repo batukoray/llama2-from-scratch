@@ -357,6 +357,8 @@ class Llama2(ComputationalGraph):
             for tensor in train_set:
                 token_ids = self.__tensorToTokenIds(tensor)
                 input_token_ids, labels = self.__createInputAndLabels(token_ids)
+                if len(labels) == 0:
+                    continue
 
                 self.setInput(input_token_ids)
                 self.setLabels(labels)
@@ -379,6 +381,9 @@ class Llama2(ComputationalGraph):
         for tensor in test_set:
             token_ids = self.__tensorToTokenIds(tensor)
             input_token_ids, labels = self.__createInputAndLabels(token_ids)
+            if len(labels) == 0:
+                continue
+
             self.setInput(input_token_ids)
 
             predicted = self.predict()
