@@ -338,7 +338,7 @@ class Llama2(ComputationalGraph):
 
         maximum_length = self.__parameter.getContextLength() + 1
         if len(token_ids) > maximum_length:
-            token_ids = token_ids[:maximum_length]
+            token_ids = token_ids[-maximum_length:]
 
         input_token_ids = token_ids[:-1]
         class_labels = token_ids[1:]
@@ -431,5 +431,4 @@ class Llama2(ComputationalGraph):
             class_labels.append(index)
 
         return class_labels
-
 
