@@ -4,7 +4,6 @@ import random
 
 from Classification.Performance.ClassificationPerformance import ClassificationPerformance
 from ComputationalGraph.ComputationalGraph import ComputationalGraph
-from ComputationalGraph.Function.Softmax import Softmax
 from ComputationalGraph.Node.ComputationalNode import ComputationalNode
 from ComputationalGraph.Node.MultiplicationNode import MultiplicationNode
 from Math.Tensor import Tensor
@@ -13,6 +12,7 @@ from SequenceProcessing.Functions.MultiplyByConstant import MultiplyByConstant
 from SequenceProcessing.Functions.RMSNorm import RMSNorm
 from SequenceProcessing.Functions.RotaryPositionEmbedding import RotaryPositionEmbedding
 from SequenceProcessing.Functions.SiLU import SiLU
+from SequenceProcessing.Functions.StableSoftmax import StableSoftmax
 from SequenceProcessing.Functions.Transpose import Transpose
 from SequenceProcessing.Parameters.Llama2Parameter import Llama2Parameter
 
@@ -179,7 +179,7 @@ class Llama2(ComputationalGraph):
 
             # still (sequence_length, sequence_length)
             masked_scores = self.addEdge(S_scaled, Mask())
-            attention_weights = self.addEdge(masked_scores, Softmax())
+            attention_weights = self.addEdge(masked_scores, StableSoftmax())
 
             # output: (sequence_length, head_dimension)
             attention_head = self.addEdge(attention_weights, value_heads[key_value_index])
@@ -257,7 +257,7 @@ class Llama2(ComputationalGraph):
         # lm_head -> logits -> softmax -> output
         lm_head = self.__createWeightNode(embedding_dimension, vocab_length)
         logits = self.addEdge(current, lm_head)
-        self.output_node = self.addEdge(logits, Softmax())
+        self.output_node = self.addEdge(logits, StableSoftmax())
 
         # for training/testing:
         class_label_node = ComputationalNode()
