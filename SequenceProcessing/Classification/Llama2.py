@@ -95,6 +95,22 @@ class Llama2(ComputationalGraph):
             is_biased=False
         )
 
+    def __addRMSNorm(self, current: ComputationalNode, dimension: int) -> ComputationalNode:
+        """
+        Adds RMS normalization followed by a learnable gamma scale.
+        """
+        normalized = self.addEdge(current, RMSNorm(epsilon=self.__parameter.getEpsilon()))
+
+        # Shape (1, dimension) broadcasts across sequence rows and lets the
+        # optimizer reduce gamma gradients back to the parameter shape.
+        gamma = MultiplicationNode(
+            value=Tensor([1.0] * dimension, shape=(1, dimension)),
+            learnable=True,
+            is_biased=False,
+            is_hadamard=True
+        )
+        return self.addEdge(normalized, gamma)
+
     def decoderBlock(self, current: ComputationalNode) -> ComputationalNode:
         """
         Builds one LLaMA 2 decoder block:
@@ -112,14 +128,13 @@ class Llama2(ComputationalGraph):
         key_value_head_count = self.__parameter.getKeyValueHeadCount()
         head_dimension = embedding_dimension // attention_head_count
         feed_forward_dimension = self.__parameter.getFeedForwardDimension()
-        epsilon = self.__parameter.getEpsilon()
 
         if head_dimension % 2 != 0:
             raise ValueError("attention head dimension must be even for RoPE.")
 
         # 1. RMSNorm
         # output: (sequence_length, embedding_dimension)
-        attention_input = self.addEdge(current, RMSNorm(embedding_dimension, epsilon))
+        attention_input = self.__addRMSNorm(current, embedding_dimension)
 
         # 2. Causal self-attention with RoPE
         # <editor-fold desc="Causal self-attention...">
@@ -181,7 +196,7 @@ class Llama2(ComputationalGraph):
         attention_residual = self.addAdditionEdge(current, attention_output, False)
 
         # 4. RMSNorm
-        feed_forward_input = self.addEdge(attention_residual, RMSNorm(embedding_dimension, epsilon))
+        feed_forward_input = self.__addRMSNorm(attention_residual, embedding_dimension)
 
         # 5. SwiGLU feed-forward network.
         # SwiGLU(x) = SiLU(xW1) hadamard (xW2)
@@ -219,9 +234,6 @@ class Llama2(ComputationalGraph):
         vocab_length = self.__parameter.getVocabularyLength()
         embedding_dimension = self.__parameter.getEmbeddingDimension()
 
-        # used when creating RMSNorm nodes
-        epsilon = self.__parameter.getEpsilon()
-
         # Create the input node.
         input_node = MultiplicationNode(learnable=False, is_biased=False)
         self.input_nodes.append(input_node)
@@ -240,10 +252,7 @@ class Llama2(ComputationalGraph):
             current = self.decoderBlock(current)
 
         # final RMSNorm
-        current = self.addEdge(
-            current,
-            RMSNorm(embedding_dimension, epsilon)
-        )
+        current = self.__addRMSNorm(current, embedding_dimension)
 
         # lm_head -> logits -> softmax -> output
         lm_head = self.__createWeightNode(embedding_dimension, vocab_length)

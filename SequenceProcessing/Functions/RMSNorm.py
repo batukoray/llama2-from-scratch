@@ -13,10 +13,8 @@ class RMSNorm(Function):
 
     __epsilon: float
     __last_input: Optional[Tensor]
-    __weights: list[float]
-    __weight_grads: list[float]
 
-    def __init__(self, dim: int, epsilon: float = 1e-6):
+    def __init__(self, epsilon: float = 1e-6):
         """
         Constructor for RMSNorm.
 
@@ -25,8 +23,6 @@ class RMSNorm(Function):
         if epsilon <= 0.0:
             raise ValueError("epsilon must be positive.")
         self.__epsilon = float(epsilon)
-        self.__weights = [1.0] * dim
-        self.__weight_grads = [0.0] * dim
         self.__last_input = None
 
     def calculate(self, tensor: Tensor) -> Tensor:
@@ -56,9 +52,8 @@ class RMSNorm(Function):
             rms_x = (mean_square + self.__epsilon) ** 0.5
 
             # Map each value to value / RMS. Normalization complete
-            for i, x_i in enumerate(row):
-                g_i = self.__weights[i]
-                values.append(g_i * x_i / rms_x)
+            for x_i in row:
+                values.append(x_i / rms_x)
 
         return Tensor(values, shape)
 
@@ -92,17 +87,11 @@ class RMSNorm(Function):
             rms = (mean_square + self.__epsilon) ** 0.5
 
             # gradient for input:
-            dot = sum(backward_row[i] * row[i] * self.__weights[i] for i in range(row_size))
+            dot = sum(backward_row[i] * row[i] for i in range(row_size))
             norm_x_sq = sum(row[i] ** 2 for i in range(row_size)) + (row_size * self.__epsilon)
 
             for i in range(row_size):
-                values.append((backward_row[i] * self.__weights[i] - row[i] * dot / norm_x_sq) / rms)
-
-            # gradient for weights (g):
-            # TODO learn if the framework supports learnable weights for functions.
-            weight_grads_delta = [backward_row[i] * row[i] / rms for i in range(row_size)]
-            for i in range(row_size):
-                self.__weight_grads[i] += weight_grads_delta[i]
+                values.append((backward_row[i] - row[i] * dot / norm_x_sq) / rms)
 
         return Tensor(values, shape)
 
