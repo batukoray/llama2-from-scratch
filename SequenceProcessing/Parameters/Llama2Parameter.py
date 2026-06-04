@@ -147,6 +147,7 @@ class Llama2Parameter(NeuralNetworkParameter):
                    epoch: int = 10,
                    optimizer: Optional[Optimizer] = None,
                    initialization: Optional[Initialization] = None,
+                   vocabulary_length=256,
                    loss: Optional[Function] = None) -> "Llama2Parameter":
         """
         Builds a very small configuration for tests and toy experiments.
@@ -159,6 +160,7 @@ class Llama2Parameter(NeuralNetworkParameter):
         :param epoch: Number of training epochs.
         :param optimizer: Optional optimizer. A default AdamW optimizer is used if none is given.
         :param initialization: Optional initialization method.
+        :param: vocabulary_length: Number of tokens in the vocabulary.
         :param loss: Optional loss function.
         :return: A compact LLaMA 2 style parameter object.
         """
@@ -175,7 +177,7 @@ class Llama2Parameter(NeuralNetworkParameter):
             optimizer=optimizer,
             initialization=initialization,
             loss=loss,
-            vocabulary_length=256,
+            vocabulary_length=vocabulary_length,
             embedding_dimension=64,
             decoder_layer_count=2,
             attention_head_count=4,
