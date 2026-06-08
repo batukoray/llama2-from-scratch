@@ -91,7 +91,7 @@ Any way the wind blows
     print()
 
     print("[3/3] Training model (this may take a few minutes)...")
-    param = Llama2Parameter.tinyLlama2(epoch=2, vocabulary_length=vocab_size)
+    param = Llama2Parameter.tinyLlama2(epoch=5, vocabulary_length=vocab_size)
     model = Llama2(param)
     model.train(train_data)
     print("       Training complete!")

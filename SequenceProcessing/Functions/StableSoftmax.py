@@ -10,11 +10,17 @@ from Math.Tensor import Tensor
 class StableSoftmax(Function):
     """
     Applies a numerically stable softmax over the last tensor dimension.
+
+    For a row x, letting m = max_j x_j:
+        y_i = exp(x_i - m) / sum_j exp(x_j - m)
     """
 
     def calculate(self, tensor: Tensor) -> Tensor:
         """
-        Computes softmax values after shifting each row by its maximum.
+        Applies stable row-wise softmax probabilities.
+
+        :param tensor: Input tensor x, where the last dimension is normalized.
+        :return: Output tensor y containing softmax probabilities.
         """
         old_values = tensor.getData()
         shape = tensor.getShape()
@@ -34,7 +40,14 @@ class StableSoftmax(Function):
 
     def derivative(self, tensor: Tensor, backward: Tensor) -> Tensor:
         """
-        Computes the softmax derivative from the output tensor.
+        Applies the softmax backward rule using the output probabilities.
+
+        For a row y and incoming gradient g = dL/dy, the implementation uses:
+            dL/dx = y hadamard (g - sum_j y_j * g_j)
+
+        :param tensor: Softmax output tensor y from the forward pass.
+        :param backward: Incoming gradient dL/dy.
+        :return: Outgoing gradient dL/dx.
         """
         old_values = tensor.getData()
         backward_values = backward.getData()
@@ -56,7 +69,11 @@ class StableSoftmax(Function):
                 input_nodes: List[ComputationalNode],
                 is_biased: bool) -> ComputationalNode:
         """
-        Adds this function as an edge to the computational graph.
+        Attaches this operator to the computational graph.
+
+        :param input_nodes: Source nodes that provide the score tensor x.
+        :param is_biased: Whether the created graph edge is marked as biased.
+        :return: Newly created function node representing row-wise softmax.
         """
         new_node = FunctionNode(function=self, is_biased=is_biased)
         input_nodes[0].add(new_node)

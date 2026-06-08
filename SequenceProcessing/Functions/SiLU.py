@@ -9,26 +9,35 @@ from Math.Tensor import Tensor
 
 class SiLU(Function):
     """
-    Applies the SiLU activation function to each tensor element.
+    Applies the SiLU activation function element-wise.
+
+    With sigma(x) = 1 / (1 + exp(-x)):
+        SiLU(x) = x * sigma(x)
     """
 
     __last_input: Optional[Tensor]
 
     def __init__(self):
         """
-        Constructor for SiLU.
+        Creates the SiLU activation operator.
         """
         self.__last_input = None
 
     def __sigmoid(self, value: float) -> float:
         """
-        Computes the sigmoid value for a single number.
+        Computes sigma(x) = 1 / (1 + exp(-x)).
+
+        :param value: Scalar input x.
+        :return: Sigmoid value sigma(x).
         """
         return 1.0 / (1.0 + math.exp(-value))
 
     def calculate(self, tensor: Tensor) -> Tensor:
         """
-        Applies SiLU to the input tensor and stores the input.
+        Applies the forward SiLU map y = x * sigma(x).
+
+        :param tensor: Input tensor x.
+        :return: Output tensor y whose entries are x_ij * sigma(x_ij).
         """
         self.__last_input = tensor
 
@@ -45,7 +54,17 @@ class SiLU(Function):
 
     def derivative(self, value: Tensor, backward: Tensor) -> Tensor:
         """
-        Computes the SiLU derivative using the stored input tensor.
+        Applies the SiLU backward rule using the stored forward input.
+
+        For y = x * sigma(x), the local derivative is:
+            dy/dx = sigma(x) + x * sigma(x) * (1 - sigma(x))
+        and the returned gradient is:
+            dL/dx = dL/dy hadamard dy/dx
+
+        :param value: Forward output tensor y. It is not used directly because
+                      the implementation reuses the stored input tensor.
+        :param backward: Incoming gradient dL/dy.
+        :return: Outgoing gradient dL/dx.
         """
         if self.__last_input is None:
             raise ValueError("SiLU derivative requires a previous calculate call.")
@@ -66,7 +85,11 @@ class SiLU(Function):
                 input_nodes: List[ComputationalNode],
                 is_biased: bool) -> ComputationalNode:
         """
-        Adds this function as an edge to the computational graph.
+        Attaches this operator to the computational graph.
+
+        :param input_nodes: Source nodes that provide the input tensor x.
+        :param is_biased: Whether the created graph edge is marked as biased.
+        :return: Newly created function node representing SiLU activation.
         """
         new_node = FunctionNode(is_biased, self)
         input_nodes[0].add(new_node)

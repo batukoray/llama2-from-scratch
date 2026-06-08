@@ -160,7 +160,7 @@ class Llama2Parameter(NeuralNetworkParameter):
         :param epoch: Number of training epochs.
         :param optimizer: Optional optimizer. A default AdamW optimizer is used if none is given.
         :param initialization: Optional initialization method.
-        :param: vocabulary_length: Number of tokens in the vocabulary.
+        :param vocabulary_length: Number of tokens in the vocabulary.
         :param loss: Optional loss function.
         :return: A compact LLaMA 2 style parameter object.
         """

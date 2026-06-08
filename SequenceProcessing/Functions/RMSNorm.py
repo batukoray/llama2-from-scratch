@@ -8,7 +8,13 @@ from Math.Tensor import Tensor
 
 class RMSNorm(Function):
     """
-    Applies RMSNorm with weight.
+    Applies row-wise root-mean-square normalization.
+
+    For a row x with width n:
+        rms(x) = sqrt((1 / n) * sum_j x_j^2 + epsilon)
+        y_j = x_j / rms(x)
+
+    The learnable scale gamma is applied outside this function by the caller.
     """
 
     __epsilon: float
@@ -16,9 +22,9 @@ class RMSNorm(Function):
 
     def __init__(self, epsilon: float = 1e-6):
         """
-        Constructor for RMSNorm.
+        Creates the RMS normalization operator.
 
-        :param epsilon: Small constant added to the row-wise mean square.
+        :param epsilon: Positive stabilizer added inside the square root.
         """
         if epsilon <= 0.0:
             raise ValueError("epsilon must be positive.")
@@ -27,10 +33,10 @@ class RMSNorm(Function):
 
     def calculate(self, tensor: Tensor) -> Tensor:
         """
-        Performs row-wise RMS normalization over the last tensor dimension.
+        Applies row-wise RMS normalization.
 
-        :param tensor: Input tensor.
-        :return: RMS-normalized tensor.
+        :param tensor: Input tensor x.
+        :return: Output tensor y where each row is divided by its rms(x).
         """
         values = []
         shape = tensor.getShape()
@@ -59,7 +65,18 @@ class RMSNorm(Function):
 
     def derivative(self, value: Tensor, backward: Tensor) -> Tensor:
         """
-        Computes the backward pass for RMS normalization.
+        Applies the backward rule for RMS normalization.
+
+        For one row x and incoming gradient g, the implementation computes:
+            rms = sqrt((1 / n) * sum_j x_j^2 + epsilon)
+            dot = sum_j g_j * x_j
+            norm_x_sq = sum_j x_j^2 + n * epsilon
+            dL/dx_i = (g_i - x_i * dot / norm_x_sq) / rms
+
+        :param value: Forward output tensor y. It is not used directly because
+                      the implementation reuses the stored input tensor.
+        :param backward: Incoming gradient dL/dy.
+        :return: Outgoing gradient dL/dx.
         """
         if self.__last_input is None:
             raise ValueError("RMSNorm has not been called yet.")
@@ -99,11 +116,11 @@ class RMSNorm(Function):
                 input_nodes: List[ComputationalNode],
                 is_biased: bool) -> ComputationalNode:
         """
-        Adds this function as an edge to the computational graph.
+        Attaches this operator to the computational graph.
 
-        :param input_nodes: Input computational nodes.
-        :param is_biased: Indicates whether the connection is biased.
-        :return: Newly created computational node.
+        :param input_nodes: Source nodes that provide the input tensor x.
+        :param is_biased: Whether the created graph edge is marked as biased.
+        :return: Newly created function node representing RMS normalization.
         """
         new_node = FunctionNode(is_biased, self)
         input_nodes[0].add(new_node)

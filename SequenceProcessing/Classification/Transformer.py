@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import math
 import random
 
@@ -29,13 +29,13 @@ class Transformer(ComputationalGraph):
     Transformer model implementation.
     """
 
-    __dictionary: VectorizedDictionary
+    __dictionary: Optional[VectorizedDictionary]
     __start_index: int
     __end_index: int
 
     def __init__(self,
                  parameter: NeuralNetworkParameter,
-                 dictionary: VectorizedDictionary):
+                 dictionary: Optional[VectorizedDictionary] = None):
         """
         Constructor for Transformer.
 
@@ -47,13 +47,14 @@ class Transformer(ComputationalGraph):
         self.__start_index = -1
         self.__end_index = -1
 
-        for k in range(self.__dictionary.size()):
-            if self.__dictionary.getWord(k).getName() == "<S>":
-                self.__start_index = k
-            elif self.__dictionary.getWord(k).getName() == "</S>":
-                self.__end_index = k
+        if self.__dictionary is not None:
+            for k in range(self.__dictionary.size()):
+                if self.__dictionary.getWord(k).getName() == "<S>":
+                    self.__start_index = k
+                elif self.__dictionary.getWord(k).getName() == "</S>":
+                    self.__end_index = k
 
-    def getDictionary(self) -> VectorizedDictionary:
+    def getDictionary(self) -> Optional[VectorizedDictionary]:
         """
         Getter for dictionary.
 

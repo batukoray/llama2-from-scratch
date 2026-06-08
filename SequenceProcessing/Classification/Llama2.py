@@ -3,10 +3,10 @@ import math
 import random
 
 from Classification.Performance.ClassificationPerformance import ClassificationPerformance
-from ComputationalGraph.ComputationalGraph import ComputationalGraph
 from ComputationalGraph.Node.ComputationalNode import ComputationalNode
 from ComputationalGraph.Node.MultiplicationNode import MultiplicationNode
 from Math.Tensor import Tensor
+from SequenceProcessing.Classification.Transformer import Transformer
 from SequenceProcessing.Functions.Mask import Mask
 from SequenceProcessing.Functions.MultiplyByConstant import MultiplyByConstant
 from SequenceProcessing.Functions.RMSNorm import RMSNorm
@@ -17,9 +17,15 @@ from SequenceProcessing.Functions.Transpose import Transpose
 from SequenceProcessing.Parameters.Llama2Parameter import Llama2Parameter
 
 
-class Llama2(ComputationalGraph):
+class Llama2(Transformer):
     """
-    LLaMA 2 decoder-only model implementation.
+    LLaMA 2 style decoder-only language model.
+
+    This class consumes a ``Llama2Parameter`` object and builds an
+    autoregressive transformer with:
+        token ids -> one-hot vectors -> embedding projection
+        -> repeated decoder blocks
+        -> final RMSNorm -> lm_head -> softmax
     """
 
     __parameter: Llama2Parameter
@@ -29,13 +35,27 @@ class Llama2(ComputationalGraph):
 
     def __init__(self, parameter: Llama2Parameter):
         """
-        Creates a new LLaMA 2 model with the given parameter object.
+        Creates a new LLaMA 2 model from a ``Llama2Parameter`` configuration.
+
+        :param parameter: Decoder-only architecture and training settings such
+                          as vocabulary size, embedding width, layer count,
+                          attention head counts, context length, optimizer, and
+                          RMS normalization epsilon.
         """
-        super().__init__(parameter)
+        super().__init__(parameter, None)
         self.__parameter = parameter
         self.__random_generator = random.Random(self.__parameter.getSeed())
 
     def createOneHotVectors(self, token_ids: List[int]) -> Tensor:
+        """
+        Converts token ids into one-hot rows.
+
+        For a token id t in a vocabulary of size V, the row e_t is:
+            e_t[k] = 1 if k == t else 0
+
+        :param token_ids: Token ids to encode.
+        :return: Tensor of shape (len(token_ids), vocabulary_length).
+        """
         values = []
         vocabulary_length = self.__parameter.getVocabularyLength()
 
@@ -56,8 +76,14 @@ class Llama2(ComputationalGraph):
 
     def setInput(self, token_ids: List[int]) -> None:
         """
-        Set the input to the model to the given token ids.
-        Also checks for context length.
+        Writes token ids into the graph input node.
+
+        The token ids are first converted to one-hot rows and then consumed by
+        the embedding matrix E in the graph, so the effective first projection
+        is:
+            X_one_hot @ E
+
+        :param token_ids: Input prompt or sequence prefix to feed into the model.
         """
         if len(self.input_nodes) == 0:
             raise ValueError("Input node must be created before calling setInput.")
@@ -76,11 +102,24 @@ class Llama2(ComputationalGraph):
             )
 
     def setLabels(self, token_ids: List[int]) -> None:
+        """
+        Writes next-token supervision labels into the graph.
+
+        The labels are stored as one-hot rows so the loss operates on
+        softmax(outputs) versus one-hot targets.
+
+        :param token_ids: Gold next-token ids for each input position.
+        """
         self.input_nodes[1].setValue(self.createOneHotVectors(token_ids))
 
     def __createWeightNode(self, input_dimension: int, output_dimension: int) -> MultiplicationNode:
         """
-        Creates a learnable matrix node with the given shape.
+        Creates a learnable projection matrix.
+
+        :param input_dimension: Number of input features.
+        :param output_dimension: Number of output features.
+        :return: Learnable matrix W with shape
+                 (input_dimension, output_dimension) used in x @ W.
         """
         return MultiplicationNode(
             value=Tensor(
@@ -97,7 +136,16 @@ class Llama2(ComputationalGraph):
 
     def __addRMSNorm(self, current: ComputationalNode, dimension: int) -> ComputationalNode:
         """
-        Adds RMS normalization followed by a learnable gamma scale.
+        Adds RMSNorm followed by a learnable scale parameter.
+
+        For each row x:
+            rms(x) = sqrt((1 / d) * sum_j x_j^2 + epsilon)
+            norm(x) = x / rms(x)
+            output = norm(x) hadamard gamma
+
+        :param current: Input node that provides the row vectors x.
+        :param dimension: Feature width d used to size the learnable gamma.
+        :return: Node representing the scaled RMS-normalized output.
         """
         normalized = self.addEdge(current, RMSNorm(epsilon=self.__parameter.getEpsilon()))
 
@@ -113,15 +161,22 @@ class Llama2(ComputationalGraph):
 
     def decoderBlock(self, current: ComputationalNode) -> ComputationalNode:
         """
-        Builds one LLaMA 2 decoder block:
-        (input)
-        1. RMSNorm
-        2. Causal self-attention with RoPE
-        3. Residual (Add)
-        4. RMSNorm
-        5. SwiGLU feed-forward
-        6. Residual (Add)
-        (output)
+        Builds one decoder block of the LLaMA-style stack.
+
+        For an input sequence matrix X, the block follows:
+            A_in = RMSNorm(X)
+            Q = RoPE(A_in @ W_Q)
+            K = RoPE(A_in @ W_K)
+            V = A_in @ W_V
+            Scores = mask((Q @ K^T) / sqrt(d_k))
+            Attn = softmax(Scores) @ V
+            H = X + concat(Attn_heads) @ W_O
+            F_in = RMSNorm(H)
+            SwiGLU(F_in) = SiLU(F_in @ W1) hadamard (F_in @ W2)
+            Output = H + SwiGLU(F_in) @ W3
+
+        :param current: Input node representing the block input matrix X.
+        :return: Output node representing the residual block output.
         """
         embedding_dimension = self.__parameter.getEmbeddingDimension()
         attention_head_count = self.__parameter.getAttentionHeadCount()
@@ -226,9 +281,16 @@ class Llama2(ComputationalGraph):
 
     def buildGraph(self) -> None:
         """
-        Builds the decoder-only forward path from token ids to embedding,
-        N decoder blocks with RMSNorm, masked self-attention with RoPE, residuals,
-        SwiGLU feed-forward, final RMSNorm, lm_head, and Softmax.
+        Builds the full decoder-only computation graph.
+
+        High-level pipeline:
+            one_hot(token_ids) @ E
+            -> decoderBlock^N
+            -> RMSNorm
+            -> lm_head
+            -> softmax
+
+        :return: None. The method populates ``input_nodes`` and ``output_node``.
         """
         # used when creating E and lm_head
         vocab_length = self.__parameter.getVocabularyLength()
@@ -268,7 +330,7 @@ class Llama2(ComputationalGraph):
 
     def __ensureGraph(self) -> None:
         """
-        Makes sure the graph exists.
+        Ensures that the computation graph and leaf-node cache exist.
         """
         if len(self.input_nodes) == 0 or self.output_node is None:
             self.buildGraph()
@@ -278,7 +340,13 @@ class Llama2(ComputationalGraph):
 
     def predictNextToken(self, token_ids: List[int]) -> int:
         """
-        Predicts the next token after the given token ids.
+        Predicts the next token id for a prefix sequence.
+
+        This runs the autoregressive pipeline on the provided prefix and returns
+        the argmax token from the final softmax row.
+
+        :param token_ids: Prefix sequence used as model context.
+        :return: Predicted next token id.
         """
         self.__ensureGraph()
 
@@ -298,7 +366,15 @@ class Llama2(ComputationalGraph):
                        max_new_tokens: int,
                        end_token_id: Optional[int] = None) -> List[int]:
         """
-        Generates tokens greedily from the current model.
+        Generates a continuation by repeated greedy next-token decoding.
+
+        At each step:
+            next_token = argmax softmax(logits_last_position)
+
+        :param token_ids: Initial prefix sequence.
+        :param max_new_tokens: Maximum number of tokens to append.
+        :param end_token_id: Optional stop token that ends generation early.
+        :return: Original prefix plus generated token ids.
         """
         generated_token_ids = list(token_ids)
 
@@ -315,7 +391,10 @@ class Llama2(ComputationalGraph):
     @staticmethod
     def __tensorToTokenIds(instance: Tensor) -> List[int]:
         """
-        Converts a 1D token-id tensor into token ids.
+        Converts a 1D tensor of numeric token ids into Python integers.
+
+        :param instance: One-dimensional tensor whose entries encode token ids.
+        :return: Token ids extracted from the tensor.
         """
         shape = instance.getShape()
         if len(shape) != 1:
@@ -331,10 +410,15 @@ class Llama2(ComputationalGraph):
 
     def __createInputAndLabels(self, token_ids: List[int]) -> tuple[List[int], List[int]]:
         """
-        Sets model input to all tokens except the last one and returns next-token labels.
-        e.g., for input [1,2,3,4]
-        returns ([1,2,3], [2,3,4])
-        for input_token_ids and labels respectively
+        Builds next-token prediction pairs from a token sequence.
+
+        For tokens [t_0, t_1, ..., t_n], this method forms:
+            input  = [t_0, ..., t_{n-1}]
+            labels = [t_1, ..., t_n]
+
+        :param token_ids: Full token sequence.
+        :return: Tuple ``(input_token_ids, class_labels)`` for teacher-forced
+                 next-token training or evaluation.
         """
         if len(token_ids) < 2:
             return [],[]
@@ -350,7 +434,9 @@ class Llama2(ComputationalGraph):
 
     def train(self, train_set: List[Tensor]) -> None:
         """
-        Trains the model as a next-token language model.
+        Trains the model with next-token prediction.
+
+        The objective aligns each position t with target token t+1.
 
         :param train_set: Training sequences represented as 1D token-id tensors.
         """
@@ -381,7 +467,7 @@ class Llama2(ComputationalGraph):
 
     def test(self, test_set: List[Tensor]):
         """
-        Tests next-token prediction accuracy.
+        Evaluates next-token prediction accuracy.
 
         :param test_set: Test sequences represented as 1D token-id tensors.
         :return: Classification performance.
@@ -412,11 +498,13 @@ class Llama2(ComputationalGraph):
 
     def getOutputValue(self, output_node: ComputationalNode) -> List[float]:
         """
-        Extracts predicted token ids from the output node.
-        Direct copy from Transformer.py
+        Extracts argmax token ids from a matrix of vocabulary probabilities.
 
-        :param output_node: Output node.
-        :return: Predicted token ids.
+        For each row y_i, the returned token is:
+            argmax_j y_i[j]
+
+        :param output_node: Node whose value stores row-wise vocabulary scores.
+        :return: Predicted token ids, one per row.
         """
         class_labels = []
         value = output_node.getValue()
