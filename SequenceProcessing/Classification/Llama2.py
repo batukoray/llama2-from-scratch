@@ -32,6 +32,7 @@ class Llama2(Transformer):
 
     __input_node: ComputationalNode
     __random_generator: random.Random
+    __last_output_value: Optional[Tensor]
 
     def __init__(self, parameter: Llama2Parameter):
         """
@@ -45,6 +46,7 @@ class Llama2(Transformer):
         super().__init__(parameter, None)
         self.__parameter = parameter
         self.__random_generator = random.Random(self.__parameter.getSeed())
+        self.__last_output_value = None
 
     def createOneHotVectors(self, token_ids: List[int]) -> Tensor:
         """
@@ -387,6 +389,67 @@ class Llama2(Transformer):
 
         return generated_token_ids
 
+    def generateSampled(self,
+                        token_ids: List[int],
+                        max_new_tokens: int,
+                        temperature: float = 1.0,
+                        end_token_id: Optional[int] = None) -> List[int]:
+        """
+        Generates a continuation by temperature-scaled probability sampling.
+
+        Instead of always picking the argmax, the last-position probability
+        distribution is rescaled by temperature T and then sampled:
+
+            p_i(T) = p_i^(1/T) / sum_j p_j^(1/T)
+
+            next_token ~ Categorical(p(T))
+
+        This is equivalent to applying temperature to the original logits z_i
+        before softmax, because p_i = exp(z_i) implies:
+
+            p_i^(1/T) = exp(z_i)^(1/T) = exp(z_i / T)
+
+        Temperature controls sharpness:
+            T < 1  — more peaked, closer to greedy
+            T = 1  — sample directly from the model distribution
+            T > 1  — more uniform, more surprising
+
+        :param token_ids: Initial prefix sequence.
+        :param max_new_tokens: Maximum number of tokens to append.
+        :param temperature: Sampling temperature, must be > 0.
+        :param end_token_id: Optional stop token that ends generation early.
+        :return: Original prefix plus generated token ids.
+        """
+        if temperature <= 0.0:
+            raise ValueError("temperature must be positive.")
+
+        self.__ensureGraph()
+        generated_token_ids = list(token_ids)
+
+        for _ in range(max_new_tokens):
+            context = generated_token_ids[-self.__parameter.getContextLength():]
+
+            self.setInput(context)
+            self.predict()
+
+            value = self.__last_output_value
+            last_row = value.getShape()[0] - 1
+            vocab_size = value.getShape()[1]
+
+            probs = [value.getValue((last_row, j)) for j in range(vocab_size)]
+
+            if temperature != 1.0:
+                probs = [p ** (1.0 / temperature) for p in probs]
+                total = sum(probs)
+                probs = [p / total for p in probs]
+
+            next_token_id = self.__random_generator.choices(range(vocab_size), weights=probs, k=1)[0]
+            generated_token_ids.append(next_token_id)
+
+            if end_token_id is not None and next_token_id == end_token_id:
+                break
+
+        return generated_token_ids
 
     @staticmethod
     def __tensorToTokenIds(instance: Tensor) -> List[int]:
@@ -508,6 +571,7 @@ class Llama2(Transformer):
         """
         class_labels = []
         value = output_node.getValue()
+        self.__last_output_value = value
 
         for i in range(value.getShape()[0]):
             max_val = float("-inf")
