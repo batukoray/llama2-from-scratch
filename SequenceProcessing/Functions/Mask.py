@@ -19,12 +19,20 @@ class Mask(Function):
 
     def calculate(self, tensor: Tensor) -> Tensor:
         """
-        Applies the mask to the tensor.
+        Applies a causal mask to a square attention score matrix.
 
-        Elements above the diagonal are replaced with negative infinity.
+        For a score matrix S of shape (T, T), every entry above the main
+        diagonal is set to negative infinity:
 
-        :param tensor: Input tensor.
-        :return: Masked tensor.
+            S_masked[i, j] = S[i, j]   if j <= i
+            S_masked[i, j] = -inf       if j > i
+
+        When softmax is applied afterwards, -inf maps to exactly 0, so
+        position i can only attend to positions 0 through i. This enforces
+        the autoregressive constraint: no token may look at future tokens.
+
+        :param tensor: Square attention score matrix S of shape (T, T).
+        :return: Masked score matrix where all future positions are -inf.
         """
         values = []
         shape = tensor.getShape()

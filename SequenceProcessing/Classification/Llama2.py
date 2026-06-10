@@ -222,7 +222,10 @@ class Llama2(Transformer):
             # Apply RoPE to Q.
             q_rope = self.addEdge(q, RotaryPositionEmbedding())
 
-            # for grouped-query attention
+            # GQA: map each query head to its shared KV head.
+            # With n_q query heads and n_kv KV heads, query head h uses
+            # KV head floor(h * n_kv / n_q), evenly spreading n_q heads
+            # across n_kv groups. When n_kv == n_q this reduces to h.
             key_value_index = head_index * key_value_head_count // attention_head_count
 
             # get K^T for S = QK^T (head_dimension, sequence_length)

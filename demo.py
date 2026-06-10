@@ -18,6 +18,26 @@ The knight rode forth into the darkness armed with nothing but gradients determi
     corpus = [line.strip() for line in corpus if line.strip()]
     full_text = " ".join(corpus)
 
+    print("=== Generation settings ===")
+    while True:
+        try:
+            temperature = float(input("Temperature (e.g. 0.5 for focused, 1.5 for chaotic) [default 0.5]: ").strip() or "0.5")
+            if temperature > 0:
+                break
+            print("  Must be greater than 0.")
+        except ValueError:
+            print("  Enter a number.")
+
+    while True:
+        try:
+            max_new_tokens = int(input("Max new tokens per generation [default 24]: ").strip() or "24")
+            if max_new_tokens > 0:
+                break
+            print("  Must be greater than 0.")
+        except ValueError:
+            print("  Enter a whole number.")
+    print()
+
     print("[1/3] Building tokenizer")
     tokenizer = SimpleTokenizer()
     tokenizer.fit(full_text)
@@ -25,7 +45,7 @@ The knight rode forth into the darkness armed with nothing but gradients determi
     print(f"Vocabulary size: {vocab_size} tokens\n")
 
     print("[2/3] Preparing training data")
-    param = Llama2Parameter.tinyLlama2(epoch=5, vocabulary_length=vocab_size)
+    param = Llama2Parameter.tinyLlama2(epoch=2, vocabulary_length=vocab_size)
     all_token_ids = tokenizer.encode(full_text)
     window_size = param.getContextLength() + 1
     stride = 4
@@ -79,7 +99,7 @@ The knight rode forth into the darkness armed with nothing but gradients determi
 
         print(f"  Token IDs: {prompt_ids}")
 
-        generated_ids = model.generateSampled(prompt_ids, max_new_tokens=24, temperature=0.5)
+        generated_ids = model.generateSampled(prompt_ids, max_new_tokens=max_new_tokens, temperature=temperature)
         generated_text = tokenizer.decode(generated_ids)
 
         print(f"  Generated: {generated_text}")
